@@ -8,18 +8,16 @@ URL = "https://api.openweathermap.org/data/2.5/weather"
 DELAY = 1           # segundos entre requests
 NUM_FILAS = 15      # <--- Cambia este valor para procesar más o menos filas
 
-# -----------------------------
 # Rutas seguras del proyecto
-# -----------------------------
+
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DATA_DIR = os.path.join(BASE_DIR, 'Data')
 
 csv_input = os.path.join(DATA_DIR, 'nyc_taxi_clean.csv')
 csv_output = os.path.join(DATA_DIR, 'nyc_taxi_weather.csv')
 
-# -----------------------------
 # Cargar dataset limpio
-# -----------------------------
+
 df = pd.read_csv(csv_input)
 
 # Seleccionar solo las filas que queremos procesar
@@ -29,9 +27,8 @@ df = df.head(NUM_FILAS).copy()
 df['clima_main'] = 'N/A'
 df['clima_desc'] = 'N/A'
 
-# -----------------------------
 # Consultar clima fila por fila
-# -----------------------------
+
 for i, row in df.iterrows():
     lat = row['pickup_latitude']
     lon = row['pickup_longitude']
@@ -53,8 +50,7 @@ for i, row in df.iterrows():
     print(f"Fila {i+1}: lat={lat}, lon={lon}, main={df.loc[i, 'clima_main']}, desc={df.loc[i, 'clima_desc']}")
     time.sleep(DELAY)
 
-# -----------------------------
 # Guardar dataset enriquecido
-# -----------------------------
+
 df.to_csv(csv_output, index=False)
 print(f"✅ Datos enriquecidos con clima guardados en {csv_output}")

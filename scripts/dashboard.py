@@ -1,7 +1,4 @@
-"""
-Dashboard simple para visualizar datos de taxis y predicciones.
-Ejecutar con: streamlit run scripts/dashboard.py
-"""
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -17,11 +14,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# Título principal
+# Título 
 st.title("🚕 NYC Taxi Trip Analysis")
 st.write("Dashboard para análisis de viajes en taxi y predicciones")
 
-# Cargar datos
+
 @st.cache_data
 def load_data():
     try:
