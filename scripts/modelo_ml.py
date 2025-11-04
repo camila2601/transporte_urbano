@@ -43,10 +43,11 @@ def train_and_evaluate():
     
     print("\n🔄 Cargando datos...")
     try:
-        # Usar una muestra más pequeña para pruebas rápidas
+        # Usar una muestra más pequeña para reducir uso de memoria
         df = pd.read_csv('data/nyc_taxi_clean.csv')
-        df = df.sample(n=min(50000, len(df)), random_state=42)  # Usar máximo 50,000 registros
-        print(f"Usando {len(df):,} registros para entrenamiento")
+        SAMPLE_SIZE = 10000  # reducir a 10k por defecto para evitar OOM
+        df = df.sample(n=min(SAMPLE_SIZE, len(df)), random_state=42)
+        print(f"Usando {len(df):,} registros para entrenamiento (SAMPLE_SIZE={SAMPLE_SIZE})")
     except Exception as e:
         print(f"❌ Error al cargar datos: {e}")
         return
@@ -65,10 +66,10 @@ def train_and_evaluate():
     models = {
         'linear': LinearRegression(),
         'random_forest': RandomForestRegressor(
-            n_estimators=50,  # Reducir número de árboles para prueba
-            max_depth=10,     # Limitar profundidad
+            n_estimators=20,  # menos árboles para bajar memoria/CPU
+            max_depth=8,      # limitar profundidad
             random_state=42,
-            n_jobs=-1         # Usar todos los cores
+            n_jobs=1          # evitar paralelismo excesivo en memoria limitada
         )
     }
     
@@ -77,14 +78,29 @@ def train_and_evaluate():
     # Entrenar y evaluar cada modelo
     for name, model in models.items():
         print(f"\n🔄 Entrenando modelo {name}...")
-        
-        # Entrenamiento con barra de progreso
-        model.fit(X_train, y_train)
-        print(f"✓ Entrenamiento completado")
-        
-        # Predicciones
-        print("Realizando predicciones...")
-        y_pred = model.predict(X_test)
+        try:
+            # Entrenamiento (puede subir memoria). Capturamos MemoryError para fallback.
+            model.fit(X_train, y_train)
+            print(f"✓ Entrenamiento completado")
+
+            # Predicciones
+            print("Realizando predicciones...")
+            y_pred = model.predict(X_test)
+        except MemoryError:
+            print(f"⚠️ MemoryError entrenando {name}. Intentando fallback con menor complejidad...")
+            # Intentar fallback: reducir n_estimators si es RandomForest
+            if hasattr(model, 'n_estimators'):
+                try:
+                    model.set_params(n_estimators=max(5, int(model.n_estimators / 4)))
+                    model.fit(X_train, y_train)
+                    y_pred = model.predict(X_test)
+                    print(f"✓ Fallback completado con n_estimators={model.n_estimators}")
+                except Exception as e:
+                    print(f"❌ Fallback falló: {e}")
+                    continue
+            else:
+                print("❌ No hay fallback disponible para este modelo")
+                continue
         
         # Evaluación
         eval_results = evaluate_model(y_test, y_pred, name)
