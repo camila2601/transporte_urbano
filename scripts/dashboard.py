@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -8,6 +7,7 @@ import joblib
 from pathlib import Path
 
 
+@st.cache_data(ttl=3600)  # Cache por 1 hora
 def load_data():
     
     try:
@@ -35,12 +35,16 @@ def main():
     st.title("🚕 NYC Taxi Trip Analysis")
     st.write("Dashboard para análisis de viajes en taxi y predicciones")
 
-    # Activar cache ahora que Streamlit está listo
-    cached_load_data = st.cache_data(load_data)
+    # Título
+    st.title("🚕 NYC Taxi Trip Analysis")
+    st.write("Dashboard para análisis de viajes en taxi y predicciones")
 
-    # Mostrar progreso mientras carga
-    with st.spinner('Cargando datos...'):
-        df = cached_load_data()
+    # Cargar datos
+    df = load_data()
+
+    SAMPLE_SIZE = 10000
+    if len(df) > SAMPLE_SIZE:
+        df = df.sample(n=SAMPLE_SIZE, random_state=42)
 
     # Sidebar con filtros
     st.sidebar.header("Filtros")
@@ -105,8 +109,11 @@ def main():
         if all(col in df.columns for col in ['pickup_latitude', 'pickup_longitude']):
             # Mapa de calor de pickups
             st.subheader("Mapa de Densidad de Recogidas")
+            
+            # Antes de crear el mapa
+            map_data = df.sample(n=min(1000, len(df)))
             fig = px.density_mapbox(
-                df,
+                map_data,
                 lat='pickup_latitude',
                 lon='pickup_longitude',
                 radius=10,
@@ -120,35 +127,61 @@ def main():
         st.subheader("Predicción de Duración")
 
         # Input para predicción
+        # Construir controles básicos (valores por defecto)
         col1, col2 = st.columns(2)
         with col1:
-            hour = st.slider("Hora del día", 0, 23, 12)
+            hour_input = st.slider("Hora del día", 0, 23, 12)
         with col2:
-            distance = st.number_input("Distancia (km)", 0.1, 50.0, 5.0)
+            distance_input = st.number_input("Distancia (km)", 0.1, 200.0, 5.0)
 
         # Botón para predecir
         if st.button("Predecir Duración"):
-            try:
-                # Intentar cargar modelo
-                model_path = Path("models/taxi_duration_model.joblib")
-                if model_path.exists():
+            model_path = Path("models/taxi_duration_model.joblib")
+            if not model_path.exists():
+                st.info("Modelo no encontrado. Entrena el modelo primero usando scripts/modelo_ml.py")
+            else:
+                try:
                     model = joblib.load(model_path)
-                    # Construir DataFrame con los mismos nombres de features usados en entrenamiento
-                    # create_features() usa 'passenger_count', 'hour' y 'distance_approx' (si aplica)
-                    input_df = pd.DataFrame({
-                        'passenger_count': [1],
-                        'hour': [hour],
-                        'distance_approx': [distance]
-                    })
+
+                    # Intentar detectar las features esperadas por el modelo
+                    expected = None
+                    try:
+                        expected = list(getattr(model, 'feature_names_in_', None) or [])
+                    except Exception:
+                        expected = None
+
+                    if not expected:
+                        # Fallback a la convención usada en el proyecto
+                        expected = ['passenger_count', 'hour', 'distance_approx']
+
+                    st.write("Características esperadas por el modelo:", expected)
+
+                    # Construir input dict respetando el orden de features
+                    input_dict = {}
+                    for feat in expected:
+                        if feat == 'passenger_count':
+                            input_dict['passenger_count'] = [1]
+                        elif feat == 'hour':
+                            input_dict['hour'] = [int(hour_input)]
+                        elif feat == 'distance_approx':
+                            # distance_input is in km already
+                            input_dict['distance_approx'] = [float(distance_input)]
+                        else:
+                            # Si la feature no está cubierta, rellenar con 0/NaN según sea numérica
+                            input_dict[feat] = [0]
+
+                    # Crear DataFrame con columnas en el orden esperado
+                    input_df = pd.DataFrame(input_dict)
+                    input_df = input_df.reindex(columns=expected)
+
+                    # Intentar predecir
                     try:
                         prediction = model.predict(input_df)
-                        st.success(f"Duración estimada: {prediction[0]:.1f} minutos")
+                        st.success(f"Duración estimada: {float(prediction[0]):.1f} minutos")
                     except Exception as e:
                         st.error(f"Error al predecir con el modelo cargado: {e}")
-                else:
-                    st.info("Modelo no encontrado. Entrena el modelo primero usando scripts/modelo_ml.py")
-            except Exception as e:
-                st.error(f"Error al predecir: {e}")
+                except Exception as e:
+                    st.error(f"No se pudo cargar el modelo: {e}")
 
     # Footer con metadata
     st.sidebar.markdown("---")

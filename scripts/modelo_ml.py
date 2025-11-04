@@ -15,15 +15,31 @@ def create_features(df):
     features = pd.DataFrame()
     
     # Features básicas y simples
-    features['passenger_count'] = df['passenger_count']
-    features['hour'] = pd.to_datetime(df['pickup_datetime']).dt.hour
-    
-    # Feature de distancia simplificada (usando diferencia de coordenadas como aproximación)
-    if all(col in df.columns for col in ['pickup_latitude', 'pickup_longitude', 'dropoff_latitude', 'dropoff_longitude']):
+    # passenger_count
+    if 'passenger_count' in df.columns:
+        features['passenger_count'] = df['passenger_count']
+    else:
+        features['passenger_count'] = 1
+
+    # hour: si ya está presente en el dataset reducido, úsala; si no, calcularla
+    if 'hour' in df.columns:
+        features['hour'] = df['hour']
+    elif 'pickup_datetime' in df.columns:
+        features['hour'] = pd.to_datetime(df['pickup_datetime']).dt.hour
+    else:
+        features['hour'] = 12
+
+    # distance_approx: usar columna precomputada si está disponible, si no intentar aproximación por coordenadas
+    if 'distance_approx' in df.columns:
+        features['distance_approx'] = df['distance_approx']
+    elif all(col in df.columns for col in ['pickup_latitude', 'pickup_longitude', 'dropoff_latitude', 'dropoff_longitude']):
         features['distance_approx'] = np.sqrt(
             (df['dropoff_latitude'] - df['pickup_latitude'])**2 +
             (df['dropoff_longitude'] - df['pickup_longitude'])**2
-        ) * 111  # Aproximación rápida a kilómetros (1 grado ≈ 111 km)
+        ) * 111
+    else:
+        # fallback a 1 km si no hay información
+        features['distance_approx'] = 1.0
     
     return features
 
@@ -43,8 +59,18 @@ def train_and_evaluate():
     
     print("\n🔄 Cargando datos...")
     try:
-        # Usar una muestra más pequeña para reducir uso de memoria
-        df = pd.read_csv('data/nyc_taxi_clean.csv')
+        # Preferir el dataset reducido generado por el notebook de limpieza
+        path_reduced = Path('data/nyc_taxi_clean_reduced.csv')
+        path_full = Path('data/nyc_taxi_clean.csv')
+        if path_reduced.exists():
+            df = pd.read_csv(path_reduced)
+            print(f"Cargando dataset reducido: {path_reduced}")
+        elif path_full.exists():
+            df = pd.read_csv(path_full)
+            print(f"Cargando dataset completo: {path_full}")
+        else:
+            raise FileNotFoundError('No se encontró ningún dataset de entrada en data/')
+
         SAMPLE_SIZE = 10000  # reducir a 10k por defecto para evitar OOM
         df = df.sample(n=min(SAMPLE_SIZE, len(df)), random_state=42)
         print(f"Usando {len(df):,} registros para entrenamiento (SAMPLE_SIZE={SAMPLE_SIZE})")
