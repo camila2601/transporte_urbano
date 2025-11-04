@@ -1,0 +1,32 @@
+# Python virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Data files (avoid committing large datasets)
+data/*.csv
+data/*.parquet
+
+# VSCode / IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+
+# Environment variables and secrets
+.env
+*.pem
+
+# Distribution / build
+dist/
+build/
